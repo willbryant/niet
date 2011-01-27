@@ -102,7 +102,7 @@ int main(int argc, char* argv[]){
 		if (pipe_to_logger(stderr_pri, log_tag, STDERR_FILENO) < 0) return 2;
 		
 		// so we're the parent process, and our stdout now goes to one logger process's stdin, and
-		// our stderr now goes to a second logger process's stdout.
+		// our stderr now goes to a second logger process's stdin.
 		fprintf(stdout, "Running %s\n", program_arguments[0]);
 		start_time = time(NULL);
 		child = fork();
@@ -112,7 +112,7 @@ int main(int argc, char* argv[]){
 			
 		} else if (child == 0) {
 			// we are the child; run the target program
-			execvp(program_arguments[0], program_arguments); // argv[argc] is supposed to be 0, so fine to pass to execvp
+			execvp(program_arguments[0], program_arguments); // argv[argc] is required to be 0, so fine to pass to execvp
 			perror("Couldn't execute program");
 			return 4;
 			
