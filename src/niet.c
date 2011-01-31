@@ -11,7 +11,6 @@
 
 #define LOGGER_COMMAND "logger"
 #define RESPAWN_CYCLE 60
-#define DEBUG_AT_CONSOLE
 
 int close_on_exec(int fileno) {
 	int result = fcntl(fileno, F_GETFD, 0);
@@ -211,6 +210,7 @@ int main(int argc, char* argv[]){
 	char* stderr_pri = DEFAULT_STDERR_PRI;
 	char* pid_file = NULL;
 	long terminate_timeout = -1;
+	int detach = 1;
 	
 	int c;
 	while ((c = getopt(argc, argv, "e:o:t:p:k:")) != -1) {
@@ -235,6 +235,10 @@ int main(int argc, char* argv[]){
 				terminate_timeout = atoi_or_default(optarg, -1);
 				if (terminate_timeout <= 0) return help();
 				break;
+			
+			case 'd':
+				detach = 0;
+				break;
 		}
 	}
 	if (optind >= argc) return help();
@@ -243,12 +247,13 @@ int main(int argc, char* argv[]){
 	if (!log_tag) log_tag = program_name(program_arguments[0]);
 	
 	// detach from the terminal and the calling shell (if any)
-	#ifndef DEBUG_AT_CONSOLE
-	if (fork() != 0) return;
-	setsid();
-	close(STDIN_FILENO);
-	chdir("/");
-	#endif
+	if (detach) {
+		if (fork() != 0) return;
+		setsid();
+		close(STDIN_FILENO);
+		open("/dev/null", O_RDONLY); // reuse STDIN_FILENO so that when we open the logger pipes this isn't used for one of the outputs
+		chdir("/");
+	}
 	umask(0);
 	
 	if (install_signal_handlers(&signals) < 0) {
