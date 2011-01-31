@@ -140,24 +140,35 @@ void reset_alarm(unsigned int seconds) {
 	alarm(seconds);
 }
 
+long atoi_or_default(char* s, long def) {
+	char* end = NULL;
+	long result = strtol(s, &end, 10);
+	if (end && *end == 0) return result;
+	return def;
+}
+
 int main(int argc, char* argv[]){
 	int respawn = 1;
 	sigset_t signals;
 	
-	char* log_tag = argv[1];
-	char* stdout_pri = argv[2];
-	char* stderr_pri = argv[3];
-	char** program_arguments = argv + 4;
-	
-	if (argc < 5) {
+	if (argc < 6) {
 		fprintf(stderr, "%s",
-			"Usage: niet someprogram user.info user.err /usr/bin/someprogram\n" \
+			"Usage: niet someprogram user.info user.err 15 /usr/bin/someprogram\n" \
 		    " - runs /usr/bin/someprogram, piping its stdout to a logger with priority\n" \
 		    "   user.info and tag someprogram, and piping its stderr to a logger with\n" \
 		    "   priority user.err and tag someprogram.  restarts someprogram if it dies,\n" \
-			"   waiting for up to %ds if it's dying quickly.\n", RESPAWN_CYCLE);
+			"   waiting for up to %ds if it's dying quickly.  restarts someprogram if\n" \
+			"   sent the TERM signal, by sending it the TERM signal and waiting up to 15\n" \
+			"   seconds for it to terminate, after which it will be sent the KILL signal\n" \
+			"   (use - to specify no timeout ie. no KILL signal).", RESPAWN_CYCLE);
 		return 100;
 	}
+	
+	char* log_tag = argv[1];
+	char* stdout_pri = argv[2];
+	char* stderr_pri = argv[3];
+	long terminate_timeout = atoi_or_default(argv[4], -1);
+	char** program_arguments = argv + 5;
 	
 	// detach from the terminal and the calling shell (if any)
 	#ifndef DEBUG_AT_CONSOLE
@@ -202,7 +213,7 @@ int main(int argc, char* argv[]){
 		} else {
 			// we are the parent; wait for a TERM signal or a CHLD signal when the child exits
 			int signo;
-			int terminated = 0;
+			int terminated = 0, killed = 0;
 			while (child) {
 				if (sigwait(&signals, &signo) < 0) {
 					perror("Failed to wait on signals");
@@ -229,6 +240,8 @@ int main(int argc, char* argv[]){
 									}
 								} else if (WTERMSIG(status) == SIGTERM && terminated) {
 									fprintf(stdout, "%s terminated as requested\n", program_arguments[0]);
+								} else if (WTERMSIG(status) == SIGKILL && killed) {
+									fprintf(stdout, "%s was killed\n", program_arguments[0]);
 								} else {
 									fprintf(stderr, "%s was terminated by signal %d\n", program_arguments[0], WTERMSIG(status));
 								}
@@ -245,6 +258,7 @@ int main(int argc, char* argv[]){
 						// we were sent a TERM, send one to the child process and then respawn it
 						fprintf(stdout, "Asking %s to terminate so we can restart it\n", program_arguments[0]);
 						kill(child, SIGTERM); // ignore errors from sending to zombies	
+						if (terminate_timeout > 0) reset_alarm(terminate_timeout);
 						terminated = 1;
 						// keep respawning
 						break;
@@ -253,8 +267,15 @@ int main(int argc, char* argv[]){
 						// we were sent a QUIT, send a TERM to the child process and then quit
 						fprintf(stdout, "Asking %s to terminate so we can shut down\n", program_arguments[0]);
 						kill(child, SIGTERM); // ignore errors from sending to zombies
+						if (terminate_timeout > 0) reset_alarm(terminate_timeout);
 						terminated = 1;
 						respawn = 0;
+						break;
+					
+					case SIGALRM:
+						fprintf(stdout, "Waited %ld seconds, killing %s\n", terminate_timeout, program_arguments[0]);
+						kill(child, SIGKILL); // ignore errors from sending to zombies
+						killed = 1;
 						break;
 					
 					case SIGUSR1:
@@ -294,8 +315,8 @@ int main(int argc, char* argv[]){
 					}
 					// ignore usr1, usr2, and hup, as we have no child process to pass them on to
 				}
-				reset_alarm(0);
 			}
+			reset_alarm(0); // clears both the KILL timer and the respawn wait timer
 		}
 	}
 	fprintf(stdout, "Shut down by request.\n");
