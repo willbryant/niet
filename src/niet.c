@@ -6,6 +6,9 @@
 #include <string.h>
 #include <sys/wait.h>
 
+#define DEFAULT_STDOUT_PRI "user.info"
+#define DEFAULT_STDERR_PRI "user.err"
+
 #define LOGGER_COMMAND "logger"
 #define RESPAWN_CYCLE 60
 #define DEBUG_AT_CONSOLE
@@ -59,7 +62,7 @@ int pipe_to_logger(char* const log_priority, char* const log_tag, int fileno, si
 		close(pipe_handles[1]); // and we won't write into the pipe, and want to notice when the actual writer closes it
 
 		// execute the logger program, replacing this program
-		char* arguments[] = {LOGGER_COMMAND, "-p", log_priority, "-t", log_tag, NULL};
+		char* const arguments[] = {LOGGER_COMMAND, "-p", log_priority, "-t", log_tag, NULL};
 		sigprocmask(SIG_UNBLOCK, blocked_signals, NULL);
 		execvp(LOGGER_COMMAND, arguments); // only returns if there's an error
 		perror("Couldn't execute logger");
@@ -147,28 +150,97 @@ long atoi_or_default(char* s, long def) {
 	return def;
 }
 
+void write_pid_file(char* pid_file) {
+	FILE* f = fopen(pid_file, "w");
+	if (f) {
+		fprintf(f, "%d\n", getpid());
+		fclose(f);
+	} else {
+		fprintf(stderr, "Couldn't open %s for writing: %s (%d)\n", pid_file, strerror(errno), errno);
+	}
+}
+
+void remove_pid_file(char* pid_file) {
+	if (unlink(pid_file) < 0) {
+		fprintf(stderr, "Couldn't unlink %s: %s (%d)\n", pid_file, strerror(errno), errno);
+	}
+}
+
+char* program_name(char* command) {
+	char* last_slash = strrchr(command, '/');
+	if (!last_slash) return command;
+	return last_slash;
+}
+
+int help() {
+	fprintf(stderr, "%s",
+		"Usage: niet /usr/bin/someprogram foo bar\n"
+		"          - Runs someprogram with the arguments 'foo' and 'bar', restarting the program again if it\n"
+		"            dies, waiting for up to %ds if it's dying in less than %ds. Sends output from the program\n"
+		"            on its stdout and stderr to syslog using `logger`.  If sent a TERM signal, sends a TERM\n"
+		"            signal to the program, waits for it to finish, and then restarts it.  If sent a QUIT\n"
+		"            signal, sends a TERM signal to the program, waits for it to finish, and then quits.\n"
+		"\n"
+		"            niet requires no privileges and should be run as the user you want to run the daemon under.\n"
+		"            It can be run as root, but running your daemons as root is generally discouraged.\n"
+		"\n"
+		"Options: -o daemon.notice  Changes the log priority of the syslog messages logged from the program's\n"
+		"                           stdout to 'daemon.notice'.  Default: %s.\n"
+		"         -e daemon.alert   Changes the log priority of the syslog messages logged from the program's\n"
+		"                           stderr to 'daemon.alert'.  Default: %s.\n"
+		"         -t syslog_tag     Changes the syslog tag of the syslog messages logged from the program's\n"
+		"                           stdout & stderr to 'syslog_tag'.  Default: the program's command name.\n"
+		"         -k 15             Sets a timeout of 15 seconds after the program is sent a TERM signal,\n"
+		"                           after which it will be killed by a KILL signal.  Default: no KILL signal.\n"
+		"         -p /var/run/x.pid Writes the PID of this process to /var/run/x.pid.  Default: no PID file.\n"
+		"                           The use of PID files is discouraged: they're just another thing to go\n"
+		"                           wrong.  niet is designed to be controlled entirely using signals, which\n"
+		"                           you can use without PID files, eg. `killall niet` or `killall -QUIT niet`;\n"
+		"                           you can tell when niet (and therefore the supervised program) has\n"
+		"                           terminated because there's nothing left to kill.\n",
+		RESPAWN_CYCLE, RESPAWN_CYCLE, DEFAULT_STDOUT_PRI, DEFAULT_STDERR_PRI);
+	return 100;
+}
+
 int main(int argc, char* argv[]){
 	int respawn = 1;
 	sigset_t signals;
 	
-	if (argc < 6) {
-		fprintf(stderr, "%s",
-			"Usage: niet someprogram user.info user.err 15 /usr/bin/someprogram\n" \
-		    " - runs /usr/bin/someprogram, piping its stdout to a logger with priority\n" \
-		    "   user.info and tag someprogram, and piping its stderr to a logger with\n" \
-		    "   priority user.err and tag someprogram.  restarts someprogram if it dies,\n" \
-			"   waiting for up to %ds if it's dying quickly.  restarts someprogram if\n" \
-			"   sent the TERM signal, by sending it the TERM signal and waiting up to 15\n" \
-			"   seconds for it to terminate, after which it will be sent the KILL signal\n" \
-			"   (use - to specify no timeout ie. no KILL signal).", RESPAWN_CYCLE);
-		return 100;
-	}
+	char* log_tag = NULL;
+	char* stdout_pri = DEFAULT_STDOUT_PRI;
+	char* stderr_pri = DEFAULT_STDERR_PRI;
+	char* pid_file = NULL;
+	long terminate_timeout = -1;
 	
-	char* log_tag = argv[1];
-	char* stdout_pri = argv[2];
-	char* stderr_pri = argv[3];
-	long terminate_timeout = atoi_or_default(argv[4], -1);
-	char** program_arguments = argv + 5;
+	int c;
+	while ((c = getopt(argc, argv, "e:o:t:p:k:")) != -1) {
+		switch (c) {
+			case 'e':
+				stderr_pri = optarg;
+				break;
+				
+			case 'o':
+				stdout_pri = optarg;
+				break;
+			
+			case 't':
+				log_tag = optarg;
+				break;
+			
+			case 'p':
+				pid_file = optarg;
+				break;
+			
+			case 'k':
+				terminate_timeout = atoi_or_default(optarg, -1);
+				if (terminate_timeout <= 0) return help();
+				break;
+		}
+	}
+	if (optind >= argc) return help();
+	
+	char** program_arguments = argv + optind;
+	if (!log_tag) log_tag = program_name(program_arguments[0]);
 	
 	// detach from the terminal and the calling shell (if any)
 	#ifndef DEBUG_AT_CONSOLE
@@ -182,6 +254,8 @@ int main(int argc, char* argv[]){
 	if (install_signal_handlers(&signals) < 0) {
 		return 6;
 	}
+	
+	if (pid_file) write_pid_file(pid_file);
 
 	// we'll be reattaching stdout and stderr to go to logger processes, so we don't want file-style output buffering
 	setvbuf(stdout, NULL, _IONBF, 0);
@@ -281,7 +355,7 @@ int main(int argc, char* argv[]){
 					case SIGUSR1:
 					case SIGUSR2:
 					case SIGHUP:
-						fprintf(stdout, "Passing the %s signal on to %s\n", strsignal(signo), program_arguments[0]);
+						fprintf(stdout, "Passing the '%s' signal on to %s\n", strsignal(signo), program_arguments[0]);
 						kill(child, signo); // ignore errors from sending to zombies
 						break;
 				
@@ -319,6 +393,8 @@ int main(int argc, char* argv[]){
 			reset_alarm(0); // clears both the KILL timer and the respawn wait timer
 		}
 	}
+	
+	if (pid_file) remove_pid_file(pid_file);
 	fprintf(stdout, "Shut down by request.\n");
 	return 0;
 }
