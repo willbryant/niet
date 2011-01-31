@@ -167,8 +167,8 @@ void remove_pid_file(char* pid_file) {
 
 char* program_name(char* command) {
 	char* last_slash = strrchr(command, '/');
-	if (!last_slash) return command;
-	return last_slash;
+	if (!last_slash || !*(last_slash + 1)) return command;
+	return last_slash + 1;
 }
 
 int help() {
