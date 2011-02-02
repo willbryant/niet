@@ -22,3 +22,10 @@ Options: -o daemon.notice  Changes the log priority of the syslog messages logge
                            you can use without PID files, eg. `killall niet` or `killall -QUIT niet`;
                            you can tell when niet (and therefore the supervised program) has
                            terminated because there's nothing left to kill.
+
+
+Installation:
+
+	make && sudo make install
+
+Installs to /usr/local/bin by default, which is usually already be on your PATH.

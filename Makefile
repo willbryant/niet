@@ -1,5 +1,8 @@
 all: niet test/output_on_both test/ignore_term
 
+install: niet
+	install $^ /usr/local/bin
+
 niet: src/niet.o
 	cc -o $@ $^
 
