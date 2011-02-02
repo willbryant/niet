@@ -1,0 +1,24 @@
+Usage: niet /usr/bin/someprogram foo bar
+          - Runs someprogram with the arguments 'foo' and 'bar', restarting the program again if it
+            dies, waiting for up to %ds if it's dying in less than %ds. Sends output from the program
+            on its stdout and stderr to syslog using `logger`.  If sent a TERM signal, sends a TERM
+            signal to the program, waits for it to finish, and then restarts it.  If sent a QUIT
+            signal, sends a TERM signal to the program, waits for it to finish, and then quits.
+
+            niet requires no privileges and should be run as the user you want to run the daemon under.
+            It can be run as root, but running your daemons as root is generally discouraged.
+
+Options: -o daemon.notice  Changes the log priority of the syslog messages logged from the program's
+                           stdout to 'daemon.notice'.  Default: %s.
+         -e daemon.alert   Changes the log priority of the syslog messages logged from the program's
+                           stderr to 'daemon.alert'.  Default: %s.
+         -t syslog_tag     Changes the syslog tag of the syslog messages logged from the program's
+                           stdout & stderr to 'syslog_tag'.  Default: the program's command name.
+         -k 15             Sets a timeout of 15 seconds after the program is sent a TERM signal,
+                           after which it will be killed by a KILL signal.  Default: no KILL signal.
+         -p /var/run/x.pid Writes the PID of this process to /var/run/x.pid.  Default: no PID file.
+                           The use of PID files is discouraged: they're just another thing to go
+                           wrong.  niet is designed to be controlled entirely using signals, which
+                           you can use without PID files, eg. `killall niet` or `killall -QUIT niet`;
+                           you can tell when niet (and therefore the supervised program) has
+                           terminated because there's nothing left to kill.
