@@ -28,4 +28,4 @@ Installation:
 
 	make && sudo make install
 
-Installs to /usr/local/bin by default, which is usually already be on your PATH.
+Installs to /usr/local/bin by default, which is usually already on your PATH.
