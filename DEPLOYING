@@ -1,0 +1,171 @@
+Deploying application daemons with niet
+=======================================
+
+If you deploy using the user you want to run the app daemon is, you can just run niet directly to
+start up your daemon.  To restart your daemon after a new release, just sent niet a TERM signal.
+
+
+Most sites host only one app per VM or run each app on the VM under individual user accounts.  If
+you do this, then you can simply use killall to send signals to the niet instance(s) running under
+the user account you're deploying with.
+
+	namespace :some_daemon do
+	  task :start do
+	    run "niet #{release_path}/lib/some_daemon.rb"
+	  end
+	
+	  task :restart do
+	    run "killall niet"
+	  end
+	
+	  task :stop do
+	    run "killall -QUIT niet"
+	  end
+	end
+
+If you have niet processes from other users on the same box, you should use -u to target only yours:
+
+	  task :restart do
+	    run "killall -u some_user niet"
+	  end
+	
+	  task :stop do
+	    run "killall -u some_user -QUIT niet"
+	  end
+
+Depending on your deployment configuration, you may need to use "sudo" instead of "run".
+
+To hook these tasks into a deploy you can use:
+
+	after "deploy:start",   "some_daemon:start"
+	after "deploy:restart", "some_daemon:restart"
+
+
+However you shouldn't use killall on Solaris, because their killall really does kill all.  Instead
+you can use the pkill utility, which works more consistently across different types of unixy OSs.
+In Solaris it is installed by default, and in Linux it's usually in the 'psmisc' package.
+
+	  task :restart do
+	    run "pkill niet"
+	  end
+	
+	  task :stop do
+	    run "pkill -QUIT niet"
+	  end
+
+Or if there are other niet users:
+
+	  task :restart do
+	    run "pkill -u some_user niet"
+	  end
+	
+	  task :stop do
+	    run "pkill -QUIT -u some_user niet"
+	  end
+
+
+If you absolutely need to run different apps under the same user and don't want to restart the
+daemons from all the apps as a group, then filtering by user isn't enough.  You can either use
+pkill's ability to filter on the command, or use the PID file option (-p).  For example:
+
+	  task :start do
+	    run "niet -p #{shared_path}/some_daemon.pid #{release_path}/lib/some_daemon.rb"
+	  end
+
+	  task :restart do
+	    run "kill `cat #{shared_path}/some_daemon.pid`"
+	  end
+	
+	  task :stop do
+	    run "kill -QUIT `cat #{shared_path}/some_daemon.pid`"
+	  end
+
+(The author thinks you shouldn't need to set your system up this way.  Separate apps should
+generally run under separate users if they have to share a VM.)
+
+
+Note that the above stop scripts initiate a stop of the daemon, but don't wait for it to complete.
+If you want to wait until the daemon terminates, you can use pgrep (or pkill -0) to see if the
+processes are running, but the easiest thing to do is to just repeat the action until there's no
+processes left:
+
+	run "while killall -u some_user -QUIT -q niet; do sleep 1; done"
+
+Or:
+
+	run "while pkill -QUIT -u some_user niet; do sleep 1; done"
+
+Again, depending on your deployment configuration, you may need to use "sudo" instead of "run".
+
+These 'while' lines are small shell loops, so if you are running them manually at the command line
+under sudo, you'll need to use a sh command line, for example:
+
+	sudo sh -c 'while pkill -QUIT -u some_user niet; do sleep 1; done'
+
+
+
+You should make sure that your daemons will be started if/when the VM reboots.  For example, you
+could put this in the crontab for some_user:
+
+	@reboot niet /apps/some_app/current/lib/some_daemon.rb
+
+This has the advantage that you can install this startup job without needing root access, by
+running crontab -e as the user, assuming cron is installed on the system.
+
+Or if you have root access to the server/VM, you could add something like this in /etc/init.d:
+
+	#!/bin/sh
+
+	case "$1" in
+	  start)
+	    su some_user -c "niet /apps/some_app/current/lib/some_daemon.rb"
+	    ;;
+	  stop)
+	    while pkill -QUIT -u some_user niet; do sleep 1; done
+	    ;;
+	  restart)
+	    pkill -u some_user niet
+	    ;;
+	  *)
+	    echo "Usage: $0 {start|stop|restart}" >&2
+	    exit 1
+	    ;;
+	esac
+
+	exit 0
+
+On Linux, you can then use "update-rc.d your_init_file_name defaults" to set this up for system
+startup & shutdown.
+
+You can start a number of daemons separately and still ask them to shut down (or ask them to restart
+their apps) with a single command:
+
+	#!/bin/sh
+
+	case "$1" in
+	  start)
+	    su some_user -c "niet /apps/some_app/current/lib/some_daemon.rb"
+	    su some_user -c "niet /apps/some_app/current/lib/another_daemon.rb"
+	    su different_user -c "niet /apps/different_app/current/lib/different_daemon.rb"
+	    ;;
+	  stop)
+	    while pkill -QUIT niet; do sleep 1; done
+	    ;;
+	  restart)
+	    pkill niet
+	    ;;
+	  *)
+	    echo "Usage: $0 {start|stop|restart}" >&2
+	    exit 1
+	    ;;
+	esac
+
+	exit 0
+
+Again, if you run a number of daemons and want to control them using individual init.d scripts,
+you can make the script more or less selective using the -u user filtering and/or pkill's process
+filtering and/or PID files.
+
+
+It shouldn't be necessary to find the PID of your app itself; note that if your app responds to the
+USR1, USR2, or HUP signals, you can send the signal to niet and it will pass it on to the process.
