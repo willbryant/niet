@@ -107,7 +107,8 @@ int install_signal_handlers(sigset_t* signals) {
 	    install_signal_handler(SIGALRM, &dummy_handler) < 0 ||
 	    install_signal_handler(SIGUSR1, &dummy_handler) < 0 ||
 	    install_signal_handler(SIGUSR2, &dummy_handler) < 0 ||
-	    install_signal_handler(SIGHUP,  &dummy_handler) < 0) {
+	    install_signal_handler(SIGHUP,  &dummy_handler) < 0 ||
+	    install_signal_handler(SIGPIPE, &dummy_handler) < 0) {
 		perror("Couldn't install signal handler");
 		return -1;
 	}
@@ -120,6 +121,7 @@ int install_signal_handlers(sigset_t* signals) {
 	    sigaddset(signals, SIGUSR1) < 0 ||
 	    sigaddset(signals, SIGUSR2) < 0 ||
 	    sigaddset(signals, SIGHUP)  < 0 ||
+	    sigaddset(signals, SIGPIPE) < 0 ||
 		sigprocmask(SIG_BLOCK, signals, NULL) < 0) {
 		perror("Couldn't establish blocked signal set");
 		return -1;
@@ -332,10 +334,15 @@ int main(int argc, char* argv[]){
 							}
 						}
 						break;
+					
+					case SIGPIPE:
+						// so someone killed the logger process (or it crashed), and we tried to write to it
+						// we can just ignore this, but it's better to restart the monitored program with a new
+						// logger, since we promised to log its output; so fall through
 
 					case SIGTERM:
 						// we were sent a TERM, send one to the child process and then respawn it
-						fprintf(stdout, "Asking %s to terminate so we can restart it\n", program_arguments[0]);
+						if (signo != SIGPIPE) fprintf(stdout, "Asking %s to terminate so we can restart it\n", program_arguments[0]); // mustn't cause another SIGPIPE in our handling of SIGPIPE!
 						kill(child, SIGTERM); // ignore errors from sending to zombies	
 						if (terminate_timeout > 0) reset_alarm(terminate_timeout);
 						terminated = 1;
