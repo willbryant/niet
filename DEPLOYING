@@ -11,7 +11,7 @@ the user account you're deploying with.
 
 	namespace :some_daemon do
 	  task :start do
-	    run "niet #{release_path}/lib/some_daemon.rb"
+	    run "niet #{current_path}/lib/some_daemon.rb"
 	  end
 	
 	  task :restart do
@@ -69,7 +69,7 @@ daemons from all the apps as a group, then filtering by user isn't enough.  You 
 pkill's ability to filter on the command, or use the PID file option (-p).  For example:
 
 	  task :start do
-	    run "niet -p #{shared_path}/some_daemon.pid #{release_path}/lib/some_daemon.rb"
+	    run "niet -p #{shared_path}/some_daemon.pid #{current_path}/lib/some_daemon.rb"
 	  end
 
 	  task :restart do
