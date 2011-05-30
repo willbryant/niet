@@ -250,7 +250,7 @@ int main(int argc, char* argv[]){
 	
 	// detach from the terminal and the calling shell (if any)
 	if (detach) {
-		if (fork() != 0) return;
+		if (fork() != 0) return 0;
 		setsid();
 		close(STDIN_FILENO);
 		open("/dev/null", O_RDONLY); // reuse STDIN_FILENO so that when we open the logger pipes this isn't used for one of the outputs
