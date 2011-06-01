@@ -8,6 +8,7 @@
 
 #define DEFAULT_STDOUT_PRI "user.info"
 #define DEFAULT_STDERR_PRI "user.err"
+#define DEFAULT_CHDIR "/"
 
 #define LOGGER_COMMAND "logger"
 #define RESPAWN_CYCLE 60
@@ -198,8 +199,9 @@ int help() {
 		"                           wrong.  niet is designed to be controlled entirely using signals, which\n"
 		"                           you can use without PID files, eg. `killall niet` or `killall -QUIT niet`;\n"
 		"                           you can tell when niet (and therefore the supervised program) has\n"
-		"                           terminated because there's nothing left to kill.\n",
-		RESPAWN_CYCLE, RESPAWN_CYCLE, DEFAULT_STDOUT_PRI, DEFAULT_STDERR_PRI);
+		"                           terminated because there's nothing left to kill.\n"
+		"         -c /cd/to/here    Changes to this directory before running the command.  Default: %s.\n",
+		RESPAWN_CYCLE, RESPAWN_CYCLE, DEFAULT_STDOUT_PRI, DEFAULT_STDERR_PRI, DEFAULT_CHDIR);
 	return 100;
 }
 
@@ -211,11 +213,12 @@ int main(int argc, char* argv[]){
 	char* stdout_pri = DEFAULT_STDOUT_PRI;
 	char* stderr_pri = DEFAULT_STDERR_PRI;
 	char* pid_file = NULL;
+	char* dir = DEFAULT_CHDIR;
 	long terminate_timeout = -1;
 	int detach = 1;
 	
 	int c;
-	while ((c = getopt(argc, argv, "e:o:t:p:k:")) != -1) {
+	while ((c = getopt(argc, argv, "e:o:t:p:k:c:")) != -1) {
 		switch (c) {
 			case 'e':
 				stderr_pri = optarg;
@@ -241,6 +244,10 @@ int main(int argc, char* argv[]){
 			case 'd':
 				detach = 0;
 				break;
+			
+			case 'c':
+				dir = optarg;
+				break;
 		}
 	}
 	if (optind >= argc) return help();
@@ -254,8 +261,8 @@ int main(int argc, char* argv[]){
 		setsid();
 		close(STDIN_FILENO);
 		open("/dev/null", O_RDONLY); // reuse STDIN_FILENO so that when we open the logger pipes this isn't used for one of the outputs
-		chdir("/");
 	}
+	chdir(dir);
 	umask(0);
 	
 	if (install_signal_handlers(&signals) < 0) {
