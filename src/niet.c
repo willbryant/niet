@@ -257,8 +257,10 @@ int main(int argc, char* argv[]){
 	
 	// detach from the terminal and the calling shell (if any)
 	if (detach) {
+		signal(SIGHUP, SIG_IGN); // ignore hangups from parents terminating; we'll install a 'real' handler for SIGHUP after forking, so can ignore errors here
 		if (fork() != 0) return 0;
 		setsid();
+		if (fork() != 0) return 0; // ensures we can't regain a controlling terminal if we open a tty
 		close(STDIN_FILENO);
 		open("/dev/null", O_RDONLY); // reuse STDIN_FILENO so that when we open the logger pipes this isn't used for one of the outputs
 	}
