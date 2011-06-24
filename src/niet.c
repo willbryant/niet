@@ -248,6 +248,9 @@ int main(int argc, char* argv[]){
 			case 'c':
 				dir = optarg;
 				break;
+			
+			case '?':
+				return help();
 		}
 	}
 	if (optind >= argc) return help();
