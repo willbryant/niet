@@ -110,7 +110,7 @@ could put this in the crontab for some_user:
 	@reboot niet /apps/some_app/current/lib/some_daemon.rb
 
 This has the advantage that you can install this startup job without needing root access, by
-running crontab -e as the user, assuming cron is installed on the system.
+running crontab -e as the user (assuming cron is installed on the system).
 
 Or if you have root access to the server/VM, you could add something like this in /etc/init.d:
 
@@ -169,3 +169,16 @@ filtering and/or PID files.
 
 It shouldn't be necessary to find the PID of your app itself; note that if your app responds to the
 USR1, USR2, or HUP signals, you can send the signal to niet and it will pass it on to the process.
+
+
+If you have trouble getting your app to start up the same way it does when you run it from the
+command line, your app probably has an implicit dependency on one or both of:
+
+- The $PATH that you have in your interactive shell.  In particular cron normally has a very tightly
+  restricted PATH that doesn't include directories like /usr/local.  Scripts will usually need to
+  give the full path to any subcommands that they run, or add to $PATH.
+
+- The current directory you are normally in when you run it.  It's more convenient to use programs
+  which will work even when not run in their 'home' directory, but you can use niet's -c option to
+  set the current directory if the app requires it.  (By default niet will always chdir to / so that
+  it won't hold open any directory handles you might want to remove or umount.)
