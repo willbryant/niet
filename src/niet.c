@@ -175,7 +175,7 @@ char* program_name(char* command) {
 }
 
 int help() {
-	fprintf(stderr, "%s",
+	fprintf(stderr,
 		"Usage: niet /usr/bin/someprogram foo bar\n"
 		"          - Runs someprogram with the arguments 'foo' and 'bar', restarting the program again if it\n"
 		"            dies, waiting for up to %ds if it's dying in less than %ds. Sends output from the program\n"
