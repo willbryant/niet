@@ -267,7 +267,7 @@ int main(int argc, char* argv[]){
 		close(STDIN_FILENO);
 		open("/dev/null", O_RDONLY); // reuse STDIN_FILENO so that when we open the logger pipes this isn't used for one of the outputs
 	}
-	chdir(dir);
+	chdir("/"); // avoid holding open the current directory handle
 	umask(0);
 	
 	if (install_signal_handlers(&signals) < 0) {
@@ -297,10 +297,18 @@ int main(int argc, char* argv[]){
 			return 3;
 			
 		} else if (child == 0) {
-			// we are the child; run the target program
+			// we are the child; change to the specified directory
+			if (chdir(dir) < 0) {
+				fprintf(stderr, "Couldn't change directory to %s: %s\n", dir, strerror(errno));
+				return 7;
+			}
+			
+			// reset our signal blocking so the child doesn't inherit it
 			sigprocmask(SIG_UNBLOCK, &signals, NULL);
+
+			// run the target program
 			execvp(program_arguments[0], program_arguments); // argv[argc] is required to be 0, so fine to pass to execvp
-			perror("Couldn't execute program");
+			fprintf(stderr, "Couldn't execute %s: %s\n", program_arguments[0], strerror(errno));
 			return 4;
 			
 		} else {
