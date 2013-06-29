@@ -1,5 +1,5 @@
-Niet, A process respawner for people who want syslogging and very little else
-=============================================================================
+Niet, a process respawner for people who want syslogging and reliable behavior
+==============================================================================
 
 
 Usage: niet /usr/bin/someprogram foo bar
