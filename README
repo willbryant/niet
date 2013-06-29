@@ -3,36 +3,46 @@ Niet, A process respawner for people who want syslogging and very little else
 
 
 Usage: niet /usr/bin/someprogram foo bar
-          - Runs someprogram with the arguments 'foo' and 'bar', restarting the program again if it
-            dies, waiting for up to 60s if it's dying in less than 60s. Sends output from the program
-            on its stdout and stderr to syslog using `logger`.  If sent a TERM signal, sends a TERM
-            signal to the program, waits for it to finish, and then restarts it.  If sent a QUIT
-            signal, sends a TERM signal to the program, waits for it to finish, and then quits.
+          - Runs someprogram with the arguments 'foo' and 'bar', restarting the
+            program again if it dies, waiting for up to 60s if it's dying in
+            less than 60s. Sends output from the program on its stdout and
+            stderr to syslog using `logger`.  If sent a TERM signal, sends a
+            TERM signal to the program, waits for it to finish, and then
+            restarts it.  If sent a QUIT signal, sends a TERM signal to the
+            program, waits for it to finish, and then quits.
 
-            niet requires no privileges and should be run as the user you want to run the daemon under.
-            It can be run as root, but running your daemons as root is generally discouraged.
+            niet requires no privileges and should be run as the user you want
+            to run the daemon under.  It can be run as root, but running your
+            software as root is generally discouraged.
 
-Options: -o daemon.notice  Changes the log priority of the syslog messages logged from the program's
-                           stdout to 'daemon.notice'.  Default: user.info.
-         -e daemon.alert   Changes the log priority of the syslog messages logged from the program's
-                           stderr to 'daemon.alert'.  Default: user.err.
-         -t syslog_tag     Changes the syslog tag of the syslog messages logged from the program's
-                           stdout & stderr to 'syslog_tag'.  Default: the program's command name.
-         -k 15             Sets a timeout of 15 seconds after the program is sent a TERM signal,
-                           after which it will be killed by a KILL signal.  Default: no KILL signal.
-         -p /var/run/x.pid Writes the PID of this process to /var/run/x.pid.  Default: no PID file.
-                           The use of PID files is discouraged: they're just another thing to go
-                           wrong.  niet is designed to be controlled entirely using signals, which
-                           you can use without PID files, eg. `killall niet` or `killall -QUIT niet`;
-                           you can tell when niet (and therefore the supervised program) has
-                           terminated because there's nothing left to kill.
-         -c /cd/to/here    Changes to this directory before running the command.  Default: /.
+Options: -o daemon.notice  Changes the log priority of the syslog messages
+                           logged from the program's stdout to 'daemon.notice'.
+                           Default: user.info.
+         -e daemon.alert   Changes the log priority of the syslog messages
+                           logged from the program's stderr to 'daemon.alert'.
+                           Default: user.err.
+         -t syslog_tag     Changes the syslog tag of the syslog messages logged
+                           from the program's stdout & stderr to 'syslog_tag'.
+                           Default: the executed program name.
+         -k 15             Sets a timeout of 15 seconds after the program is
+                           sent a TERM signal, after which it will be killed by
+                           a KILL signal.
+                           Default: no KILL signal.
+         -p /var/run/x.pid Writes the PID of this process to /var/run/x.pid.
+                           Default: no PID file.
+                           The use of PID files is discouraged: they're just
+                           another thing to go wrong.  niet is designed to be
+                           controlled entirely using signals, which you can use
+                           without PID files.  See DEPLOYING for examples.
+         -c /cd/to/here    Changes to this directory before running the command.
+                          Default: /.
 
 
 Installation
 ============
 
-To compile niet and install it to /usr/local/bin (which is usually already on your PATH), run:
+To compile niet and install it to /usr/local/bin (which is usually already on
+your PATH), run:
 
 	make && sudo make install
 
@@ -54,27 +64,33 @@ Niet does not:
 
  - have a complex and buggy process lifecycle
 
- - fill your logs and use your CPU spinning around restarting the program rapidly if it's repeatedly
-   failing (it'll wait (60s - the time the last run survived for), eg. 50s if the program lasted 10s;
-   so it won't wait if the program survived at least a minute, and it won't wait when you signal it
+ - fill your logs and use your CPU spinning around restarting the program
+   rapidly if it's repeatedly failing (it'll wait (60s - the time the last run
+   survived for), eg. 50s if the program lasted 10s; so it won't wait if the
+   program survived at least a minute, and it won't wait when you signal it
    to restart the program)
 
- - give up starting the program (datacentre clusters frequently take >30 minutes to become fully
-   operational if the database server fscks when the power comes back on)
+ - give up starting the program (datacentre clusters frequently take >30
+   minutes to become fully operational if the database server fscks when the
+   power comes back on)
 
- - mess about with logfiles (niet is for people with multiple servers, who like syslog -
-   try supervisord if you want logfiles).
+ - mess about with logfiles (niet is for people with multiple servers, who like
+   syslog - try supervisord if you want logfiles).
 
- - send you notifications (you should have alerting on your syslogs so you can see errors from
-   everything); niet will log all 'business as usual' messages, including requested restarts, at the
-   'normal' priority, and all 'not business as usual' messages, including unexpected app crashes and
-   any app output on STDERR, at the 'error' priority; you can customize these using the above options.
+ - send you notifications (you should have alerting on your syslogs so you can
+   see errors from everything); niet will log all 'business as usual' messages,
+   including requested restarts, at the 'normal' priority, and all 'not business
+   as usual' messages, including unexpected app crashes and any app output on
+   STDERR, at the 'error' priority; you can customize these using the above
+   options.
 
- - poll and restart your program if it's using too much memory (your operating system can
-   automatically limit a program's memory use, without polling - use ulimit)
+ - poll and restart your program if it's using too much memory (your operating
+   system can automatically limit a program's memory use, without polling - use
+   ulimit)
 
- - poll and restart your program if it's using too much CPU (you want your app to crash when there's
-   a lot of work on?  use something else, also learn to code)
+ - poll and restart your program if it's using too much CPU (you want your app
+   to crash when there's a lot of work on?  use something else, also learn to
+   code)
 
  - monitor the state of your server (niet is for processes - try munin)
 
