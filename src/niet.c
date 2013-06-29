@@ -4,6 +4,7 @@
 #include <fcntl.h>
 #include <signal.h>
 #include <string.h>
+#include <time.h>
 #include <sys/wait.h>
 
 #define DEFAULT_STDOUT_PRI "user.info"
