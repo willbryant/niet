@@ -5,9 +5,10 @@ Niet, a process respawner for people who want syslogging and reliable behavior
 Usage: niet /usr/bin/someprogram foo bar
           - Runs someprogram with the arguments 'foo' and 'bar', restarting the
             program again if it dies, waiting for up to 60s if it's dying in
-            less than 60s. Sends output from the program on its stdout and
-            stderr to syslog using `logger`.  If sent a TERM signal, sends a
-            TERM signal to the program, waits for it to finish, and then
+            less than 60s to prevent the program spinning its wheels.  Sends
+            output from the program on its stdout and stderr to syslog using
+            `logger` with appropriate priorities.  If sent a TERM signal, sends
+            a TERM signal to the program, waits for it to finish, and then
             restarts it.  If sent a QUIT signal, sends a TERM signal to the
             program, waits for it to finish, and then quits.
 
@@ -45,6 +46,10 @@ To compile niet and install it to /usr/local/bin (which is usually already on
 your PATH), run:
 
 	make && sudo make install
+
+To install it to /usr/bin instead, run:
+
+   make && sudo make install_to_usr_bin
 
 
 Deploying application daemons with niet

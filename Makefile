@@ -4,6 +4,9 @@ all: niet test/output_on_both test/ignore_term
 install: niet
 	install $^ /usr/local/bin
 
+install_to_usr_bin: niet
+	install $^ /usr/bin
+
 niet: src/niet.o
 	cc -o $@ $^
 
